@@ -25,8 +25,17 @@ prompts versionados con hash, `ClaudeCodeCli`), `sandbox` (Docker vía
 bollard; regla #4 verificada inspeccionando `cuerpo_contenedor()`; tests
 reales `#[ignore]`, corren con `cargo test -p micli-sandbox -- --ignored`).
 El binario expone: `init`, `status` (avance con barras y por módulo),
-`dashboard` (multi-proyecto), `req add`/`req avanzar`, `run [--sandbox]`,
-`trace verify` y `db rebuild`.
+`dashboard` (multi-proyecto), `req add`/`req avanzar`,
+`run [--sandbox] [--permission-mode]`, `trace verify`, `db rebuild` y
+`ruflo init`/`ruflo sync`.
+
+Integración con ruflo (validada E2E contra ruflo v3.34.0): `micli ruflo
+init` corre `npx --yes ruflo@latest init --no-global` en el proyecto y
+después `sync` mantiene un bloque delimitado (`<!-- micli:inicio/fin -->`)
+en el CLAUDE.md del proyecto con las reglas de `agent_rules.toml` (gates,
+protected, budget, flujo). Ese bloque es comunicación al agente; el
+enforcement sigue siendo de micli. Las sesiones que lanza `micli run`
+cargan el MCP de ruflo vía el `.mcp.json` que ruflo genera.
 
 Pendientes conocidos (mejoras, no fases): checkpoints de git por transición,
 hooks de Claude Code generados por `init` (regla `protected` en proyectos

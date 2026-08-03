@@ -4,6 +4,7 @@
 
 mod avance;
 mod comandos;
+mod ruflo;
 mod rutas;
 
 use clap::{Parser, Subcommand, ValueEnum};
@@ -50,6 +51,14 @@ enum Comando {
         /// Corre los gates aislados en Docker según [sandbox] de agent_rules.toml
         #[arg(long)]
         sandbox: bool,
+        /// Modo de permisos que se pasa a Claude Code (p. ej. acceptEdits)
+        #[arg(long)]
+        permission_mode: Option<String>,
+    },
+    /// Integración con ruflo (orquestador MCP para Claude Code)
+    Ruflo {
+        #[command(subcommand)]
+        comando: ComandoRuflo,
     },
     /// Operaciones sobre el log de eventos
     Trace {
@@ -85,6 +94,14 @@ enum ComandoTrace {
 enum ComandoDb {
     /// Reconstruye la proyección SQLite completa desde el trace
     Rebuild,
+}
+
+#[derive(Subcommand)]
+enum ComandoRuflo {
+    /// Inicializa ruflo en el proyecto (npx ruflo init) y sincroniza reglas
+    Init,
+    /// Reescribe el bloque de micli en el CLAUDE.md del proyecto desde agent_rules.toml
+    Sync,
 }
 
 /// Transiciones que dispara un humano; las del agente las dispara `run`.
@@ -144,7 +161,14 @@ fn main() -> anyhow::Result<()> {
             id,
             agente,
             sandbox,
-        } => comandos::run(&cwd, &id, &agente, sandbox)?,
+            permission_mode,
+        } => comandos::run(&cwd, &id, &agente, sandbox, permission_mode)?,
+        Comando::Ruflo {
+            comando: ComandoRuflo::Init,
+        } => ruflo::init(&cwd)?,
+        Comando::Ruflo {
+            comando: ComandoRuflo::Sync,
+        } => ruflo::sync(&cwd)?,
         Comando::Trace {
             comando: ComandoTrace::Verify,
         } => comandos::trace_verify(&cwd)?,

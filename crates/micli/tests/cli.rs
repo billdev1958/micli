@@ -128,6 +128,37 @@ fn status_muestra_estados_derivados_del_trace() {
 }
 
 #[test]
+fn ruflo_sync_escribe_el_bloque_micli_en_claude_md_y_es_idempotente() {
+    let (proyecto, global) = proyecto_inicializado();
+
+    let salida = micli(proyecto.path(), global.path(), &["ruflo", "sync"]);
+    assert!(salida.status.success(), "{}", stderr(&salida));
+    // Sin .mcp.json avisa que ruflo no está inicializado, pero sincroniza.
+    assert!(
+        stdout(&salida).contains("micli ruflo init"),
+        "{}",
+        stdout(&salida)
+    );
+
+    let claude_md = std::fs::read_to_string(proyecto.path().join("CLAUDE.md")).unwrap();
+    assert!(claude_md.contains("<!-- micli:inicio -->"));
+    assert!(claude_md.contains("cargo test --workspace"));
+    assert!(claude_md.contains("gates deterministas"));
+
+    // Contenido previo del proyecto se conserva y el bloque no se duplica.
+    std::fs::write(
+        proyecto.path().join("CLAUDE.md"),
+        format!("# Notas del equipo\n\n{claude_md}"),
+    )
+    .unwrap();
+    let repetido = micli(proyecto.path(), global.path(), &["ruflo", "sync"]);
+    assert!(repetido.status.success(), "{}", stderr(&repetido));
+    let actualizado = std::fs::read_to_string(proyecto.path().join("CLAUDE.md")).unwrap();
+    assert!(actualizado.contains("# Notas del equipo"));
+    assert_eq!(actualizado.matches("<!-- micli:inicio -->").count(), 1);
+}
+
+#[test]
 fn dashboard_muestra_todos_los_proyectos_y_tolera_rutas_perdidas() {
     let global = tempfile::tempdir().unwrap();
     let a = tempfile::tempdir().unwrap();

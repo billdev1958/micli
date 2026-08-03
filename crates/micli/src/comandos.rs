@@ -83,7 +83,7 @@ pub fn init(proyecto: &Path, name: Option<String>, profile: Perfil) -> anyhow::R
     ))
 }
 
-fn cargar_proyecto(proyecto: &Path) -> anyhow::Result<AgentRules> {
+pub(crate) fn cargar_proyecto(proyecto: &Path) -> anyhow::Result<AgentRules> {
     let ruta = rutas::dir_micli(proyecto).join(rutas::ARCHIVO_REGLAS);
     if !ruta.exists() {
         bail!(
@@ -340,10 +340,19 @@ impl EjecutorGates for GatesEnSandbox {
 /// `micli run`: ejecuta el bucle del agente para un requerimiento en
 /// `TestRojo` y persiste todo lo ocurrido en el trace. Con `usar_sandbox`,
 /// los gates corren aislados en Docker según `[sandbox]` de agent_rules.toml.
-pub fn run(proyecto: &Path, id: &str, agente: &str, usar_sandbox: bool) -> anyhow::Result<String> {
+pub fn run(
+    proyecto: &Path,
+    id: &str,
+    agente: &str,
+    usar_sandbox: bool,
+    permission_mode: Option<String>,
+) -> anyhow::Result<String> {
+    let args_extra = permission_mode
+        .map(|modo| vec!["--permission-mode".to_owned(), modo])
+        .unwrap_or_default();
     let mut ejecutor = ClaudeCodeCli {
         binario: agente.into(),
-        args_extra: Vec::new(),
+        args_extra,
     };
     if !usar_sandbox {
         return run_con(proyecto, id, &mut ejecutor, &mut GatesEnHost);
