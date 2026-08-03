@@ -1,0 +1,27 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/micli",
+    "crates/core",
+    "crates/manifest",
+    "crates/trace",
+    "crates/store",
+    "crates/sandbox",
+    "crates/agent",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+todo = "deny"
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"

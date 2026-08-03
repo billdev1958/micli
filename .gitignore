@@ -1,0 +1,3 @@
+/target
+.micli/
+.claude/settings.local.json
