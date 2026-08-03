@@ -15,10 +15,17 @@ prompts versionados con hash; presupuestos duros; `ClaudeCodeCli` sobre
 inyectables). El binario tiene el pipeline completo: `req add` / `req
 avanzar` (transiciones humanas), `run` (bucle del agente → trace con
 payloads Intento/GateResultado), `db rebuild` (trace → SQLite) y `init`
-genera `prompts/sistema.md`. `sandbox` sigue vacío. Pendientes conocidos:
-checkpoints de git por transición, hooks de Claude Code generados por
-`init` (regla `protected` en proyectos objetivo), timeout duro por proceso
-(llegará con el sandbox). Fase en curso: **Fase 5 (`sandbox`)**.
+genera `prompts/sistema.md`. **Fase 5 completada.** `sandbox` corre comandos aislados en Docker vía
+bollard: `cuerpo_contenedor()` es una función pura inspeccionada por tests
+(regla dura #4: env vacío, un solo bind proyecto→/workspace, sin socket de
+Docker, sin privilegios, cap_drop ALL, red `none` por defecto) y el timeout
+mata el contenedor. Tests reales contra Docker en `#[ignore]`
+(`cargo test -p micli-sandbox -- --ignored`, requiere `alpine:3`).
+`micli run --sandbox` corre los gates en el contenedor del proyecto.
+Pendientes conocidos: checkpoints de git por transición, hooks de Claude
+Code generados por `init` (regla `protected` en proyectos objetivo), y que
+el agente mismo corra dentro del sandbox (hoy solo los gates). Fase en
+curso: **Fase 6 (visualización de avance)**.
 
 Plan de fases: 0 bootstrap → 1 `core` → 2 `manifest` + `trace` + `store` →
 3 CLI mínimo (`init`, `status`, `trace verify`) → 4 `agent` → 5 `sandbox` →
@@ -189,7 +196,7 @@ documento es la intención; el mecanismo es la garantía.
 | 1 | No agregar dependencias sin proponerlo y esperar aprobación explícita | Hook `PreToolUse` fuerza aprobación al editar `Cargo.toml`; `cargo deny check` en CI | **Activo** |
 | 2 | No debilitar, borrar ni `#[ignore]` tests existentes para hacer pasar un cambio; si un test parece incorrecto, señalarlo y detenerse | Gate en CI comparará conteo de tests e `#[ignore]` nuevos contra baseline | Pendiente (Fase 3) |
 | 3 | No tocar `fixtures/` de tests de integración salvo pedido explícito | Hook `PreToolUse` niega Write/Edit sobre `fixtures/` | **Activo** |
-| 4 | `sandbox` nunca monta credenciales, env del host ni el socket de Docker | Tests de integración inspeccionan la config de contenedor generada | Pendiente (Fase 5) |
+| 4 | `sandbox` nunca monta credenciales, env del host ni el socket de Docker | Tests inspeccionan `cuerpo_contenedor()` (la spec exacta que recibe Docker) | **Activo** |
 | 5 | Eventos de `trace` son append-only: nunca editar ni borrar entradas | Archivo solo en modo append + `micli trace verify` valida la cadena | **Activo** |
 
 Los hooks viven en `.claude/hooks/` y se configuran en `.claude/settings.json`.

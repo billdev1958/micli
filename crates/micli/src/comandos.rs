@@ -218,14 +218,67 @@ pub fn req_avanzar(proyecto: &Path, id: &str, evento: Event) -> anyhow::Result<S
     Ok(format!("`{id}`: {desde} -> {hacia}"))
 }
 
+/// Adaptador: corre los gates dentro del sandbox de Docker. Vive aquí porque
+/// `sandbox` solo depende de `core` y no conoce el trait de `agent`.
+struct GatesEnSandbox {
+    sandbox: micli_sandbox::Sandbox,
+}
+
+impl EjecutorGates for GatesEnSandbox {
+    fn ejecutar(
+        &mut self,
+        gate: &GateSpec,
+        _dir: &Path,
+    ) -> Result<micli_agent::ResultadoGate, micli_agent::AgentError> {
+        let resultado = self.sandbox.ejecutar(&gate.cmd).map_err(|e| {
+            micli_agent::AgentError::GateNoEjecutable {
+                gate: gate.name.clone(),
+                fuente: std::io::Error::other(e.to_string()),
+            }
+        })?;
+        let mut salida = resultado.salida.clone();
+        if resultado.timeout_agotado {
+            salida.push_str("\n[micli] el gate excedió el timeout y el contenedor fue matado");
+        }
+        Ok(micli_agent::ResultadoGate {
+            gate: gate.name.clone(),
+            paso: resultado.paso(),
+            exit_code: resultado.exit_code.and_then(|c| i32::try_from(c).ok()),
+            salida,
+        })
+    }
+}
+
 /// `micli run`: ejecuta el bucle del agente para un requerimiento en
-/// `TestRojo` y persiste todo lo ocurrido en el trace.
-pub fn run(proyecto: &Path, id: &str, agente: &str) -> anyhow::Result<String> {
+/// `TestRojo` y persiste todo lo ocurrido en el trace. Con `usar_sandbox`,
+/// los gates corren aislados en Docker según `[sandbox]` de agent_rules.toml.
+pub fn run(proyecto: &Path, id: &str, agente: &str, usar_sandbox: bool) -> anyhow::Result<String> {
     let mut ejecutor = ClaudeCodeCli {
         binario: agente.into(),
         args_extra: Vec::new(),
     };
-    run_con(proyecto, id, &mut ejecutor, &mut GatesEnHost)
+    if !usar_sandbox {
+        return run_con(proyecto, id, &mut ejecutor, &mut GatesEnHost);
+    }
+
+    let reglas = cargar_proyecto(proyecto)?;
+    let sb = reglas
+        .sandbox
+        .context("agent_rules.toml no tiene sección [sandbox]; agrégala o corre sin --sandbox")?;
+    let timeout_seg = reglas.budget.map_or(30 * 60, |b| b.max_minutes * 60);
+    let config = micli_sandbox::ConfigSandbox {
+        imagen: sb.image,
+        red: match sb.network {
+            micli_manifest::SandboxNetwork::None => micli_sandbox::Red::None,
+            micli_manifest::SandboxNetwork::Bridge => micli_sandbox::Red::Bridge,
+        },
+        dir_proyecto: proyecto.canonicalize()?,
+        timeout: Duration::from_secs(timeout_seg),
+    };
+    let mut gates = GatesEnSandbox {
+        sandbox: micli_sandbox::Sandbox::nuevo(config)?,
+    };
+    run_con(proyecto, id, &mut ejecutor, &mut gates)
 }
 
 /// Cuerpo de `run` con ejecutor y gates inyectables (testeable sin procesos).

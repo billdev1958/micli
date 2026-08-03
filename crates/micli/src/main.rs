@@ -44,6 +44,9 @@ enum Comando {
         /// Binario del agente a invocar
         #[arg(long, default_value = "claude")]
         agente: String,
+        /// Corre los gates aislados en Docker según [sandbox] de agent_rules.toml
+        #[arg(long)]
+        sandbox: bool,
     },
     /// Operaciones sobre el log de eventos
     Trace {
@@ -133,7 +136,11 @@ fn main() -> anyhow::Result<()> {
         Comando::Req {
             comando: ComandoReq::Avanzar { id, evento },
         } => comandos::req_avanzar(&cwd, &id, evento.into())?,
-        Comando::Run { id, agente } => comandos::run(&cwd, &id, &agente)?,
+        Comando::Run {
+            id,
+            agente,
+            sandbox,
+        } => comandos::run(&cwd, &id, &agente, sandbox)?,
         Comando::Trace {
             comando: ComandoTrace::Verify,
         } => comandos::trace_verify(&cwd)?,

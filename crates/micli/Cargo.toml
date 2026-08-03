@@ -11,6 +11,7 @@ clap = { workspace = true }
 micli-agent = { workspace = true }
 micli-core = { workspace = true }
 micli-manifest = { workspace = true }
+micli-sandbox = { workspace = true }
 micli-store = { workspace = true }
 micli-trace = { workspace = true }
 
