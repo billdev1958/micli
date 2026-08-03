@@ -5,6 +5,8 @@ all-features = true
 yanked = "deny"
 
 [licenses]
+# Los crates del workspace son internos (publish = false) y no llevan licencia.
+private = { ignore = true }
 allow = [
     "MIT",
     "Apache-2.0",
