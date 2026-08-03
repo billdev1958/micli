@@ -8,9 +8,15 @@
 global) y `store` (proyección SQLite reconstruible) están implementados y
 testeados. El binario `micli` ya tiene `init --profile`, `status` (estado
 derivado del trace) y `trace verify`; el ámbito global respeta `MICLI_HOME`.
-`agent` y `sandbox` siguen vacíos; falta generar hooks de Claude Code en
-`init` y el wiring trace→store (`db rebuild`). Fase en curso: **Fase 4
-(`agent`)**.
+`agent` (Fase 4a) implementa el bucle de intentos completo con lógica pura:
+escalado de estrategia (1 Directo, 2–3 ConFeedback, 4 ContextoLimpio+Hipótesis,
+5 DiagnósticoPrevio), prompts versionados con hash SHA-256, presupuestos
+duros (intentos/tiempo/tokens), gates deterministas (`GatesEnHost`) y
+`ClaudeCodeCli` (`claude -p --output-format json`); traits `Ejecutor` y
+`EjecutorGates` inyectables para tests. `sandbox` sigue vacío. Pendiente
+**Fase 4b**: subcomando `micli run` (wiring agent→trace→store), payloads de
+intento/gate en el trace, checkpoints de git por transición, hooks de Claude
+Code en `init` y `db rebuild`.
 
 Plan de fases: 0 bootstrap → 1 `core` → 2 `manifest` + `trace` + `store` →
 3 CLI mínimo (`init`, `status`, `trace verify`) → 4 `agent` → 5 `sandbox` →

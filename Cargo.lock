@@ -366,6 +366,15 @@ dependencies = [
 [[package]]
 name = "micli-agent"
 version = "0.1.0"
+dependencies = [
+ "micli-core",
+ "proptest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+]
 
 [[package]]
 name = "micli-core"
