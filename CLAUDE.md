@@ -2,9 +2,12 @@
 
 ## Estado actual del proyecto
 
-**Greenfield — Fase 0 completada.** Existe el workspace de Cargo con crates
-vacíos, CI, hooks y configuración de calidad. La lógica descrita abajo es la
-meta de diseño, no código existente. Fase en curso: **Fase 1 (`core`)**.
+**Fases 0–2 completadas.** `core` (máquina de estados + requirement),
+`trace` (JSONL append-only con hash encadenado y `verificar()`), `manifest`
+(agent_rules.toml, requirements.toml, registro global) y `store` (proyección
+SQLite reconstruible) están implementados y testeados. `micli`, `agent` y
+`sandbox` siguen vacíos. Fase en curso: **Fase 3 (CLI mínimo: `init`,
+`status`, `trace verify`)**.
 
 Plan de fases: 0 bootstrap → 1 `core` → 2 `manifest` + `trace` + `store` →
 3 CLI mínimo (`init`, `status`, `trace verify`) → 4 `agent` → 5 `sandbox` →
@@ -176,7 +179,7 @@ documento es la intención; el mecanismo es la garantía.
 | 2 | No debilitar, borrar ni `#[ignore]` tests existentes para hacer pasar un cambio; si un test parece incorrecto, señalarlo y detenerse | Gate en CI comparará conteo de tests e `#[ignore]` nuevos contra baseline | Pendiente (Fase 3) |
 | 3 | No tocar `fixtures/` de tests de integración salvo pedido explícito | Hook `PreToolUse` niega Write/Edit sobre `fixtures/` | **Activo** |
 | 4 | `sandbox` nunca monta credenciales, env del host ni el socket de Docker | Tests de integración inspeccionan la config de contenedor generada | Pendiente (Fase 5) |
-| 5 | Eventos de `trace` son append-only: nunca editar ni borrar entradas | Archivo solo en modo append + `micli trace verify` valida la cadena | Pendiente (Fase 2) |
+| 5 | Eventos de `trace` son append-only: nunca editar ni borrar entradas | Archivo solo en modo append + `micli trace verify` valida la cadena | Parcial: `Trace::verificar()` listo; falta el subcomando CLI (Fase 3) |
 
 Los hooks viven en `.claude/hooks/` y se configuran en `.claude/settings.json`.
 
