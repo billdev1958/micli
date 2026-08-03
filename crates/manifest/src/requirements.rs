@@ -16,6 +16,10 @@ pub struct RequirementSpec {
     /// Especificación de lo que debe cumplirse; puede quedar vacía en Draft.
     #[serde(default)]
     pub spec: String,
+    /// Módulo funcional al que pertenece, para agrupar el avance. Vacío =
+    /// sin módulo (se agrupa como "general").
+    #[serde(default)]
+    pub modulo: String,
 }
 
 /// El archivo `requirements.toml` completo.
@@ -107,12 +111,15 @@ mod tests {
             [[requirements]]
             id = "REQ-002"
             titulo = "Login"
+            modulo = "auth"
         "#,
         )
         .unwrap();
         assert_eq!(archivo.requirements.len(), 2);
         assert_eq!(archivo.requirements[0].id.as_str(), "REQ-001");
+        assert_eq!(archivo.requirements[0].modulo, "");
         assert_eq!(archivo.requirements[1].spec, "");
+        assert_eq!(archivo.requirements[1].modulo, "auth");
     }
 
     #[test]

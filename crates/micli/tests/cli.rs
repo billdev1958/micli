@@ -52,6 +52,8 @@ fn init_genera_manifests_y_registra_globalmente() {
 
     let registro = std::fs::read_to_string(global.path().join("projects.toml")).unwrap();
     assert!(registro.contains("demo"));
+    // La ruta registrada es legible: sin el prefijo \\?\ de canonicalize().
+    assert!(!registro.contains('?'), "{registro}");
 
     // Reintentar el init falla: el proyecto ya está registrado.
     let repetido = micli(
@@ -84,6 +86,7 @@ fn status_muestra_estados_derivados_del_trace() {
             [[requirements]]
             id = "REQ-001"
             titulo = "Alta de usuarios"
+            modulo = "auth"
             [[requirements]]
             id = "REQ-002"
             titulo = "Login"
@@ -117,6 +120,62 @@ fn status_muestra_estados_derivados_del_trace() {
     // REQ-002 no tiene eventos: declarado en Draft.
     assert!(texto.contains("REQ-002"));
     assert!(texto.contains("Draft"));
+    // Avance global y desglose por módulo.
+    assert!(texto.contains("Avance:"), "{texto}");
+    assert!(texto.contains("Por módulo:"), "{texto}");
+    assert!(texto.contains("auth"), "{texto}");
+    assert!(texto.contains("general"), "{texto}");
+}
+
+#[test]
+fn dashboard_muestra_todos_los_proyectos_y_tolera_rutas_perdidas() {
+    let global = tempfile::tempdir().unwrap();
+    let a = tempfile::tempdir().unwrap();
+    let b = tempfile::tempdir().unwrap();
+    for (dir, nombre) in [(&a, "alfa"), (&b, "beta")] {
+        let salida = micli(
+            dir.path(),
+            global.path(),
+            &["init", "--profile", "rust", "--name", nombre],
+        );
+        assert!(salida.status.success(), "{}", stderr(&salida));
+    }
+    // alfa consigue un requerimiento aceptado vía trace directo.
+    std::fs::write(
+        a.path().join(".micli").join("requirements.toml"),
+        r#"
+            version = 1
+            [[requirements]]
+            id = "REQ-001"
+            titulo = "Alta"
+        "#,
+    )
+    .unwrap();
+    let mut trace = Trace::abrir(a.path().join(".micli").join("trace.jsonl")).unwrap();
+    trace
+        .append(Payload::RequirementCreado {
+            id: RequirementId::new("REQ-001"),
+            titulo: "Alta".to_owned(),
+        })
+        .unwrap();
+
+    let salida = micli(a.path(), global.path(), &["dashboard"]);
+    assert!(salida.status.success(), "{}", stderr(&salida));
+    let texto = stdout(&salida);
+    assert!(texto.contains("Proyectos registrados: 2"), "{texto}");
+    assert!(texto.contains("alfa"), "{texto}");
+    assert!(texto.contains("beta"), "{texto}");
+    assert!(texto.contains('%'), "{texto}");
+
+    // Si el directorio de un proyecto desaparece, el dashboard no revienta.
+    let ruta_beta = b.path().to_path_buf();
+    drop(b);
+    assert!(!ruta_beta.exists());
+    let salida = micli(a.path(), global.path(), &["dashboard"]);
+    assert!(salida.status.success(), "{}", stderr(&salida));
+    let texto = stdout(&salida);
+    assert!(texto.contains("no accesible"), "{texto}");
+    assert!(texto.contains("alfa"), "{texto}");
 }
 
 #[test]

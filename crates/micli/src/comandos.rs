@@ -1,6 +1,7 @@
 //! Implementación de los subcomandos. Cada función devuelve el texto a
 //! imprimir; `main` es el único punto de salida a terminal.
 
+use crate::avance::{Avance, barra, por_modulo};
 use crate::rutas;
 use anyhow::{Context, bail};
 use micli_agent::{
@@ -36,9 +37,11 @@ después de tu intento; tu autoevaluación no cuenta.
 
 /// `micli init`: genera `.micli/` y registra el proyecto en el ámbito global.
 pub fn init(proyecto: &Path, name: Option<String>, profile: Perfil) -> anyhow::Result<String> {
-    let proyecto = proyecto
-        .canonicalize()
-        .with_context(|| format!("no existe el directorio {}", proyecto.display()))?;
+    let proyecto = rutas::ruta_legible(
+        proyecto
+            .canonicalize()
+            .with_context(|| format!("no existe el directorio {}", proyecto.display()))?,
+    );
     let name = match name {
         Some(n) => n,
         None => proyecto
@@ -127,40 +130,125 @@ pub fn status(proyecto: &Path) -> anyhow::Result<String> {
     let entradas = Trace::abrir(dir.join(rutas::ARCHIVO_TRACE))?.entradas()?;
     let (mut estados, mut titulos) = estados_desde_trace(&entradas);
 
-    let mut salida = format!(
-        "Proyecto: {} (perfil {:?})\nTrace: {} eventos\n",
-        reglas.project.name,
-        reglas.project.profile,
-        entradas.len()
-    );
-    let mut filas: Vec<(String, State, String)> = Vec::new();
+    let mut filas: Vec<(String, String, State, String)> = Vec::new();
     for req in &declarados.requirements {
         let id = req.id.as_str().to_owned();
         let estado = estados.get(&id).copied().unwrap_or(State::Draft);
-        filas.push((id.clone(), estado, req.titulo.clone()));
+        filas.push((id.clone(), req.modulo.clone(), estado, req.titulo.clone()));
         estados.remove(&id);
         titulos.remove(&id);
     }
     // Requerimientos que aparecen en el trace pero no están declarados.
-    let mut extra: Vec<(String, State, String)> = estados
+    let mut extra: Vec<(String, String, State, String)> = estados
         .into_iter()
         .map(|(id, estado)| {
             let titulo = titulos.remove(&id).unwrap_or_default();
-            (id, estado, format!("{titulo} [no declarado]"))
+            (
+                id,
+                String::new(),
+                estado,
+                format!("{titulo} [no declarado]"),
+            )
         })
         .collect();
     extra.sort_by(|a, b| a.0.cmp(&b.0));
     filas.extend(extra);
 
+    let avance = Avance::desde(filas.iter().map(|f| f.2));
+    let mut salida = format!(
+        "Proyecto: {} (perfil {:?})\nTrace: {} eventos\nAvance: {} {}% ({}/{} aceptados, {} bloqueados)\n",
+        reglas.project.name,
+        reglas.project.profile,
+        entradas.len(),
+        barra(&avance, 20),
+        avance.porcentaje(),
+        avance.aceptados,
+        avance.total,
+        avance.bloqueados,
+    );
+
     if filas.is_empty() {
         salida.push_str("Sin requerimientos declarados.\n");
     } else {
-        salida.push_str("Requerimientos:\n");
-        for (id, estado, titulo) in filas {
-            let _ = writeln!(salida, "  {id:<12} {:<24} {titulo}", estado.to_string());
+        salida.push_str("\nPor módulo:\n");
+        let grupos = por_modulo(filas.iter().map(|f| (f.1.as_str(), f.2)));
+        for (modulo, avance) in &grupos {
+            let _ = writeln!(
+                salida,
+                "  {modulo:<14} {} {:>3}% ({}/{})",
+                barra(avance, 20),
+                avance.porcentaje(),
+                avance.aceptados,
+                avance.total,
+            );
+        }
+        salida.push_str("\nRequerimientos:\n");
+        for (id, modulo, estado, titulo) in filas {
+            let modulo = if modulo.trim().is_empty() {
+                crate::avance::MODULO_GENERAL
+            } else {
+                &modulo
+            };
+            let _ = writeln!(
+                salida,
+                "  {id:<12} {modulo:<14} {:<24} {titulo}",
+                estado.to_string()
+            );
         }
     }
     Ok(salida)
+}
+
+/// `micli dashboard`: avance de todos los proyectos registrados en esta
+/// instalación. Cada proyecto es autocontenido: se lee su propio trace.
+pub fn dashboard() -> anyhow::Result<String> {
+    let registro = Registry::cargar(&rutas::registro_global()?)?;
+    if registro.projects.is_empty() {
+        return Ok(
+            "No hay proyectos registrados. Corre `micli init --profile <perfil>` en cada proyecto."
+                .to_owned(),
+        );
+    }
+    let mut salida = format!("Proyectos registrados: {}\n\n", registro.projects.len());
+    for proyecto in &registro.projects {
+        match avance_de_proyecto(&proyecto.path) {
+            Ok(avance) => {
+                let _ = writeln!(
+                    salida,
+                    "  {:<16} {} {:>3}% ({}/{} aceptados, {} bloqueados)  {}",
+                    proyecto.name,
+                    barra(&avance, 20),
+                    avance.porcentaje(),
+                    avance.aceptados,
+                    avance.total,
+                    avance.bloqueados,
+                    proyecto.path.display(),
+                );
+            }
+            Err(error) => {
+                let _ = writeln!(salida, "  {:<16} (no accesible: {error})", proyecto.name);
+            }
+        }
+    }
+    Ok(salida)
+}
+
+/// Avance de un proyecto: requerimientos declarados (Draft si no tienen
+/// eventos) más los que solo existen en el trace.
+fn avance_de_proyecto(proyecto: &Path) -> anyhow::Result<Avance> {
+    let dir = rutas::dir_micli(proyecto);
+    if !dir.join(rutas::ARCHIVO_REGLAS).exists() {
+        bail!("no existe {}", dir.display());
+    }
+    let declarados = RequirementsFile::cargar(&dir.join(rutas::ARCHIVO_REQUIREMENTS))?;
+    let entradas = Trace::abrir(dir.join(rutas::ARCHIVO_TRACE))?.entradas()?;
+    let (mut estados, _) = estados_desde_trace(&entradas);
+    let mut todos: Vec<State> = Vec::new();
+    for req in &declarados.requirements {
+        todos.push(estados.remove(req.id.as_str()).unwrap_or(State::Draft));
+    }
+    todos.extend(estados.into_values());
+    Ok(Avance::desde(todos))
 }
 
 /// `micli trace verify`: valida la cadena completa de eventos.

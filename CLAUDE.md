@@ -15,17 +15,24 @@ prompts versionados con hash; presupuestos duros; `ClaudeCodeCli` sobre
 inyectables). El binario tiene el pipeline completo: `req add` / `req
 avanzar` (transiciones humanas), `run` (bucle del agente → trace con
 payloads Intento/GateResultado), `db rebuild` (trace → SQLite) y `init`
-genera `prompts/sistema.md`. **Fase 5 completada.** `sandbox` corre comandos aislados en Docker vía
-bollard: `cuerpo_contenedor()` es una función pura inspeccionada por tests
-(regla dura #4: env vacío, un solo bind proyecto→/workspace, sin socket de
-Docker, sin privilegios, cap_drop ALL, red `none` por defecto) y el timeout
-mata el contenedor. Tests reales contra Docker en `#[ignore]`
-(`cargo test -p micli-sandbox -- --ignored`, requiere `alpine:3`).
-`micli run --sandbox` corre los gates en el contenedor del proyecto.
-Pendientes conocidos: checkpoints de git por transición, hooks de Claude
-Code generados por `init` (regla `protected` en proyectos objetivo), y que
-el agente mismo corra dentro del sandbox (hoy solo los gates). Fase en
-curso: **Fase 6 (visualización de avance)**.
+genera `prompts/sistema.md`. **Las 6 fases del plan están completadas.** Resumen por crate:
+`core` (máquina de estados con `transition()` + proptest), `trace` (JSONL
+append-only con hash encadenado; verificado también contra manipulación
+real), `manifest` (agent_rules.toml con plantillas por perfil,
+requirements.toml con módulos, registro global), `store` (proyección SQLite
+reconstruible), `agent` (bucle de intentos con escalado, presupuestos duros,
+prompts versionados con hash, `ClaudeCodeCli`), `sandbox` (Docker vía
+bollard; regla #4 verificada inspeccionando `cuerpo_contenedor()`; tests
+reales `#[ignore]`, corren con `cargo test -p micli-sandbox -- --ignored`).
+El binario expone: `init`, `status` (avance con barras y por módulo),
+`dashboard` (multi-proyecto), `req add`/`req avanzar`, `run [--sandbox]`,
+`trace verify` y `db rebuild`.
+
+Pendientes conocidos (mejoras, no fases): checkpoints de git por transición,
+hooks de Claude Code generados por `init` (regla `protected` en proyectos
+objetivo, hoy solo mecánica en este repo), el agente mismo dentro del
+sandbox (hoy solo los gates), gate de baseline de tests (regla #2) y DB
+índice global como caché del dashboard (hoy lee cada trace directo).
 
 Plan de fases: 0 bootstrap → 1 `core` → 2 `manifest` + `trace` + `store` →
 3 CLI mínimo (`init`, `status`, `trace verify`) → 4 `agent` → 5 `sandbox` →

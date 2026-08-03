@@ -2,6 +2,7 @@
 //! terminal. Único crate del workspace con permiso de imprimir.
 #![allow(clippy::print_stdout)]
 
+mod avance;
 mod comandos;
 mod rutas;
 
@@ -32,6 +33,8 @@ enum Comando {
     },
     /// Muestra el estado de los requerimientos del proyecto actual
     Status,
+    /// Avance de todos los proyectos registrados en esta instalación
+    Dashboard,
     /// Ciclo de vida de un requerimiento (transiciones humanas)
     Req {
         #[command(subcommand)]
@@ -130,6 +133,7 @@ fn main() -> anyhow::Result<()> {
     let salida = match cli.comando {
         Comando::Init { profile, name } => comandos::init(&cwd, name, profile.into())?,
         Comando::Status => comandos::status(&cwd)?,
+        Comando::Dashboard => comandos::dashboard()?,
         Comando::Req {
             comando: ComandoReq::Add { id },
         } => comandos::req_add(&cwd, &id)?,

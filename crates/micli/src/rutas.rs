@@ -45,3 +45,10 @@ pub fn registro_global() -> anyhow::Result<PathBuf> {
 pub fn dir_micli(proyecto: &Path) -> PathBuf {
     proyecto.join(DIR_PROYECTO)
 }
+
+/// `canonicalize()` en Windows antepone el prefijo `\\?\`; se retira para
+/// que las rutas registradas y mostradas sean legibles.
+pub fn ruta_legible(path: PathBuf) -> PathBuf {
+    let texto = path.display().to_string();
+    texto.strip_prefix(r"\\?\").map_or(path, PathBuf::from)
+}
