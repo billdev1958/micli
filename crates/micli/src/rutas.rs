@@ -9,6 +9,9 @@ pub const DIR_PROYECTO: &str = ".micli";
 pub const ARCHIVO_REGLAS: &str = "agent_rules.toml";
 pub const ARCHIVO_REQUIREMENTS: &str = "requirements.toml";
 pub const ARCHIVO_TRACE: &str = "trace.jsonl";
+pub const ARCHIVO_DB: &str = "micli.db";
+/// Prompt de sistema versionado dentro del repo del proyecto.
+pub const ARCHIVO_PROMPT_SISTEMA: &str = "prompts/sistema.md";
 const ARCHIVO_REGISTRO: &str = "projects.toml";
 
 /// Directorio global de micli. `MICLI_HOME` tiene prioridad (útil en tests y

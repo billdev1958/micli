@@ -48,6 +48,7 @@ fn init_genera_manifests_y_registra_globalmente() {
     assert!(dir.join("agent_rules.toml").exists());
     assert!(dir.join("requirements.toml").exists());
     assert!(dir.join("trace.jsonl").exists());
+    assert!(dir.join("prompts").join("sistema.md").exists());
 
     let registro = std::fs::read_to_string(global.path().join("projects.toml")).unwrap();
     assert!(registro.contains("demo"));
@@ -149,6 +150,53 @@ fn trace_verify_detecta_alteraciones() {
     let roto = micli(proyecto.path(), global.path(), &["trace", "verify"]);
     assert!(!roto.status.success());
     assert!(stderr(&roto).contains("alterada"));
+}
+
+#[test]
+fn el_ciclo_req_add_y_avanzar_funciona_por_terminal() {
+    let (proyecto, global) = proyecto_inicializado();
+    std::fs::write(
+        proyecto.path().join(".micli").join("requirements.toml"),
+        r#"
+            version = 1
+            [[requirements]]
+            id = "REQ-001"
+            titulo = "Alta de usuarios"
+            spec = "Dado un correo valido, crear el usuario."
+        "#,
+    )
+    .unwrap();
+
+    let add = micli(proyecto.path(), global.path(), &["req", "add", "REQ-001"]);
+    assert!(add.status.success(), "{}", stderr(&add));
+    assert!(stdout(&add).contains("Draft"));
+
+    let avanzar = micli(
+        proyecto.path(),
+        global.path(),
+        &["req", "avanzar", "REQ-001", "--evento", "aprobar-spec"],
+    );
+    assert!(avanzar.status.success(), "{}", stderr(&avanzar));
+    assert!(stdout(&avanzar).contains("SpecAprobada"));
+
+    // Un evento inválido para el estado actual falla con explicación.
+    let invalido = micli(
+        proyecto.path(),
+        global.path(),
+        &["req", "avanzar", "REQ-001", "--evento", "aprobar-spec"],
+    );
+    assert!(!invalido.status.success());
+    assert!(stderr(&invalido).contains("transición rechazada"));
+
+    // run exige TestRojo (falla antes de invocar agente alguno).
+    let run = micli(proyecto.path(), global.path(), &["run", "REQ-001"]);
+    assert!(!run.status.success());
+    assert!(stderr(&run).contains("TestRojo"));
+
+    // db rebuild proyecta lo que hay.
+    let rebuild = micli(proyecto.path(), global.path(), &["db", "rebuild"]);
+    assert!(rebuild.status.success(), "{}", stderr(&rebuild));
+    assert!(proyecto.path().join(".micli").join("micli.db").exists());
 }
 
 #[test]

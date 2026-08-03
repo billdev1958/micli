@@ -22,6 +22,28 @@ pub enum Payload {
         desde: State,
         hacia: State,
     },
+    /// Un intento del agente sobre un requerimiento. `estrategia` viaja como
+    /// texto para no acoplar el trace al crate `agent`.
+    Intento {
+        requirement_id: RequirementId,
+        numero: u32,
+        estrategia: String,
+        tokens: u64,
+        duracion_ms: u64,
+        gates_pasaron: bool,
+        /// Resumen corto del desenlace del intento (p. ej. el gate que falló).
+        resumen: String,
+        /// Hash del prompt de sistema usado, para comparar versiones.
+        hash_prompt_sistema: String,
+    },
+    /// Resultado de un gate durante la verificación de un intento.
+    GateResultado {
+        requirement_id: RequirementId,
+        intento: u32,
+        gate: String,
+        paso: bool,
+        exit_code: Option<i32>,
+    },
 }
 
 /// Una entrada del log append-only. `hash` cubre todos los demás campos

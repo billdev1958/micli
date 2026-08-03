@@ -8,15 +8,17 @@
 global) y `store` (proyección SQLite reconstruible) están implementados y
 testeados. El binario `micli` ya tiene `init --profile`, `status` (estado
 derivado del trace) y `trace verify`; el ámbito global respeta `MICLI_HOME`.
-`agent` (Fase 4a) implementa el bucle de intentos completo con lógica pura:
-escalado de estrategia (1 Directo, 2–3 ConFeedback, 4 ContextoLimpio+Hipótesis,
-5 DiagnósticoPrevio), prompts versionados con hash SHA-256, presupuestos
-duros (intentos/tiempo/tokens), gates deterministas (`GatesEnHost`) y
-`ClaudeCodeCli` (`claude -p --output-format json`); traits `Ejecutor` y
-`EjecutorGates` inyectables para tests. `sandbox` sigue vacío. Pendiente
-**Fase 4b**: subcomando `micli run` (wiring agent→trace→store), payloads de
-intento/gate en el trace, checkpoints de git por transición, hooks de Claude
-Code en `init` y `db rebuild`.
+**Fase 4 completada.** `agent` implementa el bucle de intentos (escalado
+1 Directo, 2–3 ConFeedback, 4 ContextoLimpio+Hipótesis, 5 DiagnósticoPrevio;
+prompts versionados con hash; presupuestos duros; `ClaudeCodeCli` sobre
+`claude -p --output-format json`; traits `Ejecutor`/`EjecutorGates`
+inyectables). El binario tiene el pipeline completo: `req add` / `req
+avanzar` (transiciones humanas), `run` (bucle del agente → trace con
+payloads Intento/GateResultado), `db rebuild` (trace → SQLite) y `init`
+genera `prompts/sistema.md`. `sandbox` sigue vacío. Pendientes conocidos:
+checkpoints de git por transición, hooks de Claude Code generados por
+`init` (regla `protected` en proyectos objetivo), timeout duro por proceso
+(llegará con el sandbox). Fase en curso: **Fase 5 (`sandbox`)**.
 
 Plan de fases: 0 bootstrap → 1 `core` → 2 `manifest` + `trace` + `store` →
 3 CLI mínimo (`init`, `status`, `trace verify`) → 4 `agent` → 5 `sandbox` →

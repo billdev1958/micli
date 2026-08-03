@@ -196,6 +196,38 @@ mod tests {
     }
 
     #[test]
+    fn registra_intentos_y_resultados_de_gates() {
+        let (_dir, mut trace) = trace_temporal();
+        trace
+            .append(Payload::Intento {
+                requirement_id: RequirementId::new("REQ-001"),
+                numero: 1,
+                estrategia: "Directo".to_owned(),
+                tokens: 1500,
+                duracion_ms: 60_000,
+                gates_pasaron: false,
+                resumen: "falló gate tests".to_owned(),
+                hash_prompt_sistema: "abc123".to_owned(),
+            })
+            .unwrap();
+        trace
+            .append(Payload::GateResultado {
+                requirement_id: RequirementId::new("REQ-001"),
+                intento: 1,
+                gate: "tests".to_owned(),
+                paso: false,
+                exit_code: Some(1),
+            })
+            .unwrap();
+        assert_eq!(trace.verificar().unwrap(), 2);
+        let entradas = trace.entradas().unwrap();
+        assert!(matches!(
+            &entradas[0].payload,
+            Payload::Intento { numero: 1, .. }
+        ));
+    }
+
+    #[test]
     fn reabrir_retoma_la_cadena_donde_quedo() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("trace.jsonl");

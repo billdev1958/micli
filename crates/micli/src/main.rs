@@ -32,10 +32,40 @@ enum Comando {
     },
     /// Muestra el estado de los requerimientos del proyecto actual
     Status,
+    /// Ciclo de vida de un requerimiento (transiciones humanas)
+    Req {
+        #[command(subcommand)]
+        comando: ComandoReq,
+    },
+    /// Ejecuta el bucle del agente para un requerimiento en TestRojo
+    Run {
+        /// Id del requerimiento (declarado en requirements.toml)
+        id: String,
+        /// Binario del agente a invocar
+        #[arg(long, default_value = "claude")]
+        agente: String,
+    },
     /// Operaciones sobre el log de eventos
     Trace {
         #[command(subcommand)]
         comando: ComandoTrace,
+    },
+    /// Operaciones sobre la proyección SQLite
+    Db {
+        #[command(subcommand)]
+        comando: ComandoDb,
+    },
+}
+
+#[derive(Subcommand)]
+enum ComandoReq {
+    /// Registra en el trace un requerimiento declarado en requirements.toml
+    Add { id: String },
+    /// Aplica una transición humana al requerimiento
+    Avanzar {
+        id: String,
+        #[arg(long, value_enum)]
+        evento: EventoHumano,
     },
 }
 
@@ -43,6 +73,32 @@ enum Comando {
 enum ComandoTrace {
     /// Verifica la integridad de la cadena de eventos
     Verify,
+}
+
+#[derive(Subcommand)]
+enum ComandoDb {
+    /// Reconstruye la proyección SQLite completa desde el trace
+    Rebuild,
+}
+
+/// Transiciones que dispara un humano; las del agente las dispara `run`.
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum EventoHumano {
+    AprobarSpec,
+    ConfirmarTestRojo,
+    Bloquear,
+    Desbloquear,
+}
+
+impl From<EventoHumano> for micli_core::Event {
+    fn from(evento: EventoHumano) -> Self {
+        match evento {
+            EventoHumano::AprobarSpec => Self::AprobarSpec,
+            EventoHumano::ConfirmarTestRojo => Self::ConfirmarTestRojo,
+            EventoHumano::Bloquear => Self::Bloquear,
+            EventoHumano::Desbloquear => Self::Desbloquear,
+        }
+    }
 }
 
 /// Espejo de `manifest::Perfil` para clap (kebab-case en la terminal).
@@ -71,9 +127,19 @@ fn main() -> anyhow::Result<()> {
     let salida = match cli.comando {
         Comando::Init { profile, name } => comandos::init(&cwd, name, profile.into())?,
         Comando::Status => comandos::status(&cwd)?,
+        Comando::Req {
+            comando: ComandoReq::Add { id },
+        } => comandos::req_add(&cwd, &id)?,
+        Comando::Req {
+            comando: ComandoReq::Avanzar { id, evento },
+        } => comandos::req_avanzar(&cwd, &id, evento.into())?,
+        Comando::Run { id, agente } => comandos::run(&cwd, &id, &agente)?,
         Comando::Trace {
             comando: ComandoTrace::Verify,
         } => comandos::trace_verify(&cwd)?,
+        Comando::Db {
+            comando: ComandoDb::Rebuild,
+        } => comandos::db_rebuild(&cwd)?,
     };
     println!("{salida}");
     Ok(())

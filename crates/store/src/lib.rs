@@ -121,8 +121,7 @@ impl Store {
                        resultado      TEXT NOT NULL,
                        tokens         INTEGER NOT NULL,
                        duracion_ms    INTEGER NOT NULL,
-                       hash_evento    TEXT NOT NULL UNIQUE,
-                       UNIQUE (requirement_id, numero)
+                       hash_evento    TEXT NOT NULL UNIQUE
                      );
                      CREATE TABLE gate_results (
                        id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -460,13 +459,24 @@ mod tests {
                 hash_evento: "hash-9".to_owned(),
             })
             .unwrap();
-        // Mismo intento repetido: viola UNIQUE (requirement_id, numero).
+        // Otra corrida puede repetir el numero de intento (se reinicia por
+        // corrida); lo que nunca se repite es el hash del evento.
+        store
+            .proyectar_attempt(&AttemptRow {
+                requirement_id: "REQ-001".to_owned(),
+                numero: 1,
+                resultado: "otra corrida".to_owned(),
+                tokens: 1,
+                duracion_ms: 1,
+                hash_evento: "hash-10".to_owned(),
+            })
+            .unwrap();
         assert!(
             store
                 .proyectar_attempt(&AttemptRow {
                     requirement_id: "REQ-001".to_owned(),
-                    numero: 1,
-                    resultado: "otro".to_owned(),
+                    numero: 2,
+                    resultado: "hash duplicado".to_owned(),
                     tokens: 1,
                     duracion_ms: 1,
                     hash_evento: "hash-10".to_owned(),

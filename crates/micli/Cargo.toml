@@ -8,8 +8,10 @@ publish.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }
+micli-agent = { workspace = true }
 micli-core = { workspace = true }
 micli-manifest = { workspace = true }
+micli-store = { workspace = true }
 micli-trace = { workspace = true }
 
 [dev-dependencies]

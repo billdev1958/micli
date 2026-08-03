@@ -357,8 +357,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "micli-agent",
  "micli-core",
  "micli-manifest",
+ "micli-store",
  "micli-trace",
  "tempfile",
 ]
