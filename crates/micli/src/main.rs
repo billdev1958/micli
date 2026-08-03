@@ -131,6 +131,8 @@ enum PerfilArg {
     Angular,
     PythonFastapi,
     Node,
+    #[value(alias = "golang")]
+    Go,
 }
 
 impl From<PerfilArg> for Perfil {
@@ -140,6 +142,7 @@ impl From<PerfilArg> for Perfil {
             PerfilArg::Angular => Self::Angular,
             PerfilArg::PythonFastapi => Self::PythonFastapi,
             PerfilArg::Node => Self::Node,
+            PerfilArg::Go => Self::Go,
         }
     }
 }

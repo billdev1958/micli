@@ -14,6 +14,8 @@ pub enum Perfil {
     Angular,
     PythonFastapi,
     Node,
+    #[serde(alias = "golang")]
+    Go,
 }
 
 /// Sección `[project]`.
@@ -186,6 +188,10 @@ impl AgentRules {
                 vec![gate("tests", "npm test"), gate("lint", "npm run lint")],
                 "node:22-slim",
             ),
+            Perfil::Go => (
+                vec![gate("tests", "go test ./..."), gate("vet", "go vet ./...")],
+                "golang:1-alpine",
+            ),
         };
         Self {
             version: Self::VERSION,
@@ -298,6 +304,17 @@ mod tests {
     }
 
     #[test]
+    fn el_perfil_go_acepta_el_alias_golang() {
+        for nombre in ["go", "golang"] {
+            let reglas = AgentRules::parse(&format!(
+                "version = 1\n[project]\nname = \"demo\"\nprofile = \"{nombre}\"\n"
+            ))
+            .unwrap();
+            assert_eq!(reglas.project.profile, Perfil::Go, "perfil `{nombre}`");
+        }
+    }
+
+    #[test]
     fn rechaza_version_desconocida() {
         let error = AgentRules::parse(
             r#"
@@ -382,6 +399,7 @@ mod tests {
             Perfil::Angular,
             Perfil::PythonFastapi,
             Perfil::Node,
+            Perfil::Go,
         ] {
             let plantilla = AgentRules::plantilla("demo".to_owned(), perfil);
             let toml = toml::to_string_pretty(&plantilla).unwrap();
