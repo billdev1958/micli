@@ -1,3 +1,11 @@
 /target
 .micli/
 .claude/settings.local.json
+
+# Artefactos que ruflo genera al correr en este directorio
+.claude-flow/
+.claude/proven-config.json
+.claude/.proven-config-version
+.swarm/
+.agents/
+ruvector.db
