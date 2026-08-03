@@ -147,6 +147,69 @@ impl AgentRules {
     pub fn gates_requeridos(&self) -> impl Iterator<Item = &Gate> {
         self.gates.iter().filter(|g| g.required)
     }
+
+    /// Serializa y escribe el archivo en `path`, creando el directorio padre
+    /// si falta. Falla si el archivo ya existe: las reglas de un proyecto se
+    /// editan a mano, no se regeneran.
+    pub fn guardar(&self, path: &Path) -> Result<(), ManifestError> {
+        crate::escribir_nuevo(path, &toml::to_string_pretty(self)?)
+    }
+
+    /// Reglas iniciales para un proyecto según su perfil predefinido.
+    pub fn plantilla(name: String, profile: Perfil) -> Self {
+        let (gates, image) = match profile {
+            Perfil::Rust => (
+                vec![
+                    gate("tests", "cargo test --workspace"),
+                    gate(
+                        "lint",
+                        "cargo clippy --workspace --all-targets -- -D warnings",
+                    ),
+                ],
+                "rust:1-slim",
+            ),
+            Perfil::Angular => (
+                vec![
+                    gate("tests", "npm test -- --watch=false"),
+                    gate("lint", "npm run lint"),
+                ],
+                "node:22-slim",
+            ),
+            Perfil::PythonFastapi => (
+                vec![
+                    gate("tests", "pytest -x --tb=short"),
+                    gate("lint", "ruff check ."),
+                ],
+                "python:3.12-slim",
+            ),
+            Perfil::Node => (
+                vec![gate("tests", "npm test"), gate("lint", "npm run lint")],
+                "node:22-slim",
+            ),
+        };
+        Self {
+            version: Self::VERSION,
+            project: ProjectInfo { name, profile },
+            gates,
+            protected: Protected::default(),
+            sandbox: Some(SandboxConfig {
+                image: image.to_owned(),
+                network: SandboxNetwork::None,
+            }),
+            budget: Some(Budget {
+                max_attempts: 5,
+                max_minutes: 30,
+            }),
+        }
+    }
+}
+
+fn gate(name: &str, cmd: &str) -> Gate {
+    Gate {
+        name: name.to_owned(),
+        cmd: cmd.to_owned(),
+        required: true,
+    }
 }
 
 #[cfg(test)]
@@ -310,6 +373,40 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(vacio, ManifestError::GateInvalido { .. }));
+    }
+
+    #[test]
+    fn las_plantillas_de_todos_los_perfiles_son_validas_y_roundtripean() {
+        for perfil in [
+            Perfil::Rust,
+            Perfil::Angular,
+            Perfil::PythonFastapi,
+            Perfil::Node,
+        ] {
+            let plantilla = AgentRules::plantilla("demo".to_owned(), perfil);
+            let toml = toml::to_string_pretty(&plantilla).unwrap();
+            let releida = AgentRules::parse(&toml).unwrap();
+            assert_eq!(releida, plantilla, "perfil {perfil:?}");
+            assert!(releida.gates_requeridos().count() >= 2);
+            assert_eq!(
+                releida.sandbox.unwrap().network,
+                SandboxNetwork::None,
+                "el sandbox de plantilla nunca abre red"
+            );
+        }
+    }
+
+    #[test]
+    fn guardar_no_sobreescribe_reglas_existentes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(".micli").join("agent_rules.toml");
+        let plantilla = AgentRules::plantilla("demo".to_owned(), Perfil::Rust);
+        plantilla.guardar(&path).unwrap();
+        assert_eq!(AgentRules::cargar(&path).unwrap(), plantilla);
+        assert!(matches!(
+            plantilla.guardar(&path),
+            Err(ManifestError::ArchivoYaExiste { .. })
+        ));
     }
 
     #[test]

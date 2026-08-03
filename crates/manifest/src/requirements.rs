@@ -45,6 +45,19 @@ impl RequirementsFile {
         Self::parse(&contenido)
     }
 
+    /// Archivo inicial sin requerimientos declarados.
+    pub fn vacio() -> Self {
+        Self {
+            version: Self::VERSION,
+            requirements: Vec::new(),
+        }
+    }
+
+    /// Serializa y escribe el archivo en `path`; falla si ya existe.
+    pub fn guardar(&self, path: &Path) -> Result<(), ManifestError> {
+        crate::escribir_nuevo(path, &toml::to_string_pretty(self)?)
+    }
+
     fn validar(&self) -> Result<(), ManifestError> {
         if self.version != Self::VERSION {
             return Err(ManifestError::VersionNoSoportada {

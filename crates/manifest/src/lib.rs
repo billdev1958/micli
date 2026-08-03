@@ -39,4 +39,23 @@ pub enum ManifestError {
     RequirementDuplicado { id: String },
     #[error("el proyecto `{proyecto}` ya está registrado")]
     ProyectoDuplicado { proyecto: String },
+    #[error("el archivo `{path}` ya existe; no se sobreescribe")]
+    ArchivoYaExiste { path: String },
+}
+
+/// Escribe `contenido` en `path` solo si el archivo no existe todavía,
+/// creando el directorio padre si falta.
+pub(crate) fn escribir_nuevo(path: &std::path::Path, contenido: &str) -> Result<(), ManifestError> {
+    if let Some(padre) = path.parent()
+        && !padre.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(padre)?;
+    }
+    if path.exists() {
+        return Err(ManifestError::ArchivoYaExiste {
+            path: path.display().to_string(),
+        });
+    }
+    std::fs::write(path, contenido)?;
+    Ok(())
 }
