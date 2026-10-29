@@ -94,7 +94,7 @@ pub fn cuerpo_contenedor(config: &ConfigSandbox, cmd: &str) -> ContainerCreateBo
         host_config: Some(HostConfig {
             binds: Some(vec![format!(
                 "{}:{WORKSPACE}",
-                config.dir_proyecto.display()
+                ruta_bind(&config.dir_proyecto)
             )]),
             network_mode: Some(config.red.network_mode().to_owned()),
             privileged: Some(false),
@@ -102,6 +102,18 @@ pub fn cuerpo_contenedor(config: &ConfigSandbox, cmd: &str) -> ContainerCreateBo
             ..HostConfig::default()
         }),
         ..ContainerCreateBody::default()
+    }
+}
+
+/// Ruta del proyecto en el formato que el daemon de Docker acepta como bind.
+/// `Path::canonicalize` en Windows produce el prefijo verbatim `\\?\` (p. ej.
+/// `\\?\C:\dev\proyecto`); Docker parte el bind por `:` y rechaza `\\?\C` como
+/// "not a valid Windows path", así que el prefijo se quita aquí.
+fn ruta_bind(dir: &std::path::Path) -> String {
+    let ruta = dir.display().to_string();
+    match ruta.strip_prefix(r"\\?\") {
+        Some(sin_prefijo) => sin_prefijo.to_owned(),
+        None => ruta,
     }
 }
 
@@ -231,6 +243,17 @@ mod tests {
             assert!(!bind.contains(".aws"), "monta credenciales: {bind}");
         }
         assert!(host.mounts.is_none(), "no debe haber mounts adicionales");
+    }
+
+    #[test]
+    fn el_bind_quita_el_prefijo_verbatim_de_windows() {
+        // canonicalize() en Windows devuelve `\\?\C:\...`; Docker rechaza ese
+        // prefijo en un bind ("\\?\C is not a valid Windows path").
+        let mut cfg = config(Red::None);
+        cfg.dir_proyecto = PathBuf::from(r"\\?\C:\dev\proyecto");
+        let cuerpo = cuerpo_contenedor(&cfg, "pytest");
+        let binds = cuerpo.host_config.unwrap().binds.unwrap();
+        assert_eq!(binds, vec![r"C:\dev\proyecto:/workspace".to_owned()]);
     }
 
     #[test]
