@@ -38,6 +38,17 @@ pub enum AgentError {
         #[source]
         fuente: std::io::Error,
     },
+    /// El proceso del agente salió con error sin producir un resultado
+    /// (sesión no iniciada, flag inválido, API caída…). No es un intento:
+    /// el bucle lo propaga sin consumir presupuesto ni bloquear.
+    #[error(
+        "el agente no arrancó (código de salida {}): {stderr}",
+        exit_code.map_or_else(|| "desconocido".to_owned(), |c| c.to_string())
+    )]
+    AgenteNoArranco {
+        exit_code: Option<i32>,
+        stderr: String,
+    },
     #[error("no se pudo ejecutar el gate `{gate}`: {fuente}")]
     GateNoEjecutable {
         gate: String,

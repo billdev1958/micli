@@ -244,6 +244,56 @@ fn si_el_agente_no_termina_cuenta_intento_y_no_corre_gates() {
     assert_eq!(gates.llamadas, 1);
 }
 
+/// Ejecutor cuyo proceso nunca arranca (p. ej. `claude` sin sesión).
+struct EjecutorQueNoArranca {
+    llamadas: u32,
+}
+
+impl Ejecutor for EjecutorQueNoArranca {
+    fn ejecutar(
+        &mut self,
+        _solicitud: SolicitudIntento<'_>,
+    ) -> Result<ResultadoIntento, AgentError> {
+        self.llamadas += 1;
+        Err(AgentError::AgenteNoArranco {
+            exit_code: Some(1),
+            stderr: "Not logged in".to_owned(),
+        })
+    }
+}
+
+#[test]
+fn si_el_agente_no_arranca_no_consume_intentos_ni_bloquea() {
+    let mut ejecutor = EjecutorQueNoArranca { llamadas: 0 };
+    let mut gates = GatesMock::nuevo(vec![true]);
+    let sistema = PromptVersionado::desde_texto("sistema".to_owned());
+    let gates_spec = gate_requerido();
+    let dir = PathBuf::from(".");
+    let plan = PlanEjecucion {
+        spec: "implementar suma",
+        prompt_sistema: &sistema,
+        gates: &gates_spec,
+        presupuesto: presupuesto_amplio(),
+        dir_trabajo: &dir,
+    };
+
+    let error = ejecutar_requerimiento(&plan, &mut ejecutor, &mut gates).unwrap_err();
+    assert!(
+        matches!(
+            &error,
+            AgentError::AgenteNoArranco {
+                exit_code: Some(1),
+                stderr
+            } if stderr == "Not logged in"
+        ),
+        "{error:?}"
+    );
+    // Una sola invocación: sin reintentos ciegos ni escalado de estrategia.
+    assert_eq!(ejecutor.llamadas, 1);
+    assert_eq!(gates.llamadas, 0);
+    assert!(error.to_string().contains("Not logged in"), "{error}");
+}
+
 #[test]
 fn un_gate_no_requerido_que_falla_no_impide_aceptar() {
     let gates_spec = vec![

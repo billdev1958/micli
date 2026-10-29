@@ -127,6 +127,9 @@ pub fn ejecutar_requerimiento(
             fallo_anterior: feedback,
         });
 
+        // Si el agente no arranca (`AgenteNoArranco`, `AgenteNoEjecutable`)
+        // el error sale tal cual: no es un intento, no consume presupuesto y
+        // el requerimiento no se bloquea; es un problema de infraestructura.
         let resultado = ejecutor.ejecutar(SolicitudIntento {
             prompt_sistema: plan.prompt_sistema,
             prompt,
@@ -135,7 +138,8 @@ pub fn ejecutar_requerimiento(
         control.registrar_intento(resultado.duracion, resultado.tokens);
 
         if !resultado.exito {
-            // El agente no terminó: cuenta como intento fallido sin gates.
+            // El agente arrancó pero no terminó: cuenta como intento fallido
+            // sin gates.
             fallo_anterior = Some(ResumenFallo::nuevo(
                 "agente",
                 None,

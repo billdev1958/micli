@@ -706,6 +706,45 @@ mod tests {
         assert!(error.to_string().contains("TestRojo"), "{error}");
     }
 
+    /// El proceso del agente no arranca (sin sesión, flag inválido, API caída).
+    struct EjecutorQueNoArranca;
+
+    impl Ejecutor for EjecutorQueNoArranca {
+        fn ejecutar(
+            &mut self,
+            _solicitud: SolicitudIntento<'_>,
+        ) -> Result<ResultadoIntento, AgentError> {
+            Err(AgentError::AgenteNoArranco {
+                exit_code: Some(1),
+                stderr: "Not logged in. Run `claude login`.".to_owned(),
+            })
+        }
+    }
+
+    #[test]
+    fn run_falla_sin_tocar_el_trace_si_el_agente_no_arranca() {
+        let (_temp, proyecto) = proyecto_en_test_rojo();
+        let ruta_trace = rutas::dir_micli(&proyecto).join(rutas::ARCHIVO_TRACE);
+        let eventos_antes = Trace::abrir(&ruta_trace).unwrap().entradas().unwrap().len();
+
+        let error = run_con(
+            &proyecto,
+            "REQ-001",
+            &mut EjecutorQueNoArranca,
+            &mut GatesMock { pasan: true },
+        )
+        .unwrap_err();
+
+        // El operador ve la causa real, no "el agente no terminó" cinco veces.
+        assert!(error.to_string().contains("Not logged in"), "{error}");
+        // Ni intentos ni transiciones: el requerimiento sigue en TestRojo y
+        // `micli run` puede relanzarse cuando el entorno esté arreglado.
+        let trace = Trace::abrir(&ruta_trace).unwrap();
+        trace.verificar().unwrap();
+        assert_eq!(trace.entradas().unwrap().len(), eventos_antes);
+        assert_eq!(estado_actual(&proyecto, "REQ-001"), State::TestRojo);
+    }
+
     #[test]
     fn run_bloquea_cuando_los_gates_nunca_pasan_y_rebuild_lo_proyecta() {
         let (_temp, proyecto) = proyecto_en_test_rojo();

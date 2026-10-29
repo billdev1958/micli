@@ -70,6 +70,49 @@ impl ClaudeCodeCli {
     }
 }
 
+/// Tope de stderr que se conserva en [`AgentError::AgenteNoArranco`].
+const MAX_STDERR: usize = 2000;
+
+/// Lo que dejó el proceso del agente al terminar, antes de interpretarlo.
+struct SalidaProceso<'a> {
+    exit_ok: bool,
+    exit_code: Option<i32>,
+    stdout: &'a str,
+    stderr: &'a str,
+    duracion: Duration,
+}
+
+/// Decide si el proceso fue un intento o un fallo de arranque.
+///
+/// - stdout con JSON de resultado → intento (con sus tokens, aunque el
+///   proceso haya salido con error: Claude Code emite `is_error: true` y
+///   código distinto de cero cuando falla ya corriendo).
+/// - sin JSON y código de salida distinto de cero → el agente no arrancó;
+///   se devuelve [`AgentError::AgenteNoArranco`] con la cola de stderr.
+/// - sin JSON y salida limpia → respuesta ilegible.
+fn interpretar_salida(salida: SalidaProceso<'_>) -> Result<ResultadoIntento, AgentError> {
+    match parsear_respuesta(salida.stdout, salida.duracion) {
+        Ok(resultado) => Ok(ResultadoIntento {
+            exito: resultado.exito && salida.exit_ok,
+            ..resultado
+        }),
+        Err(_) if !salida.exit_ok => Err(AgentError::AgenteNoArranco {
+            exit_code: salida.exit_code,
+            stderr: cola(salida.stderr.trim(), MAX_STDERR),
+        }),
+        Err(error) => Err(error),
+    }
+}
+
+/// Últimos `max` caracteres de `texto` (lo más informativo de un stderr).
+fn cola(texto: &str, max: usize) -> String {
+    let total = texto.chars().count();
+    if total <= max {
+        return texto.to_owned();
+    }
+    texto.chars().skip(total - max).collect()
+}
+
 /// Interpreta la respuesta JSON de `claude -p --output-format json`.
 /// Tolerante a campos ausentes: si no hay `usage`, los tokens quedan en 0.
 fn parsear_respuesta(json: &str, duracion: Duration) -> Result<ResultadoIntento, AgentError> {
@@ -110,14 +153,13 @@ impl Ejecutor for ClaudeCodeCli {
                 fuente,
             })?;
         let duracion = inicio.elapsed();
-        if !salida.status.success() {
-            return Ok(ResultadoIntento {
-                exito: false,
-                tokens: 0,
-                duracion,
-            });
-        }
-        parsear_respuesta(&String::from_utf8_lossy(&salida.stdout), duracion)
+        interpretar_salida(SalidaProceso {
+            exit_ok: salida.status.success(),
+            exit_code: salida.status.code(),
+            stdout: &String::from_utf8_lossy(&salida.stdout),
+            stderr: &String::from_utf8_lossy(&salida.stderr),
+            duracion,
+        })
     }
 }
 
@@ -178,5 +220,71 @@ mod tests {
         assert_eq!(minima.tokens, 0);
 
         assert!(parsear_respuesta("esto no es json", Duration::ZERO).is_err());
+    }
+
+    fn salida<'a>(exit_code: i32, stdout: &'a str, stderr: &'a str) -> SalidaProceso<'a> {
+        SalidaProceso {
+            exit_ok: exit_code == 0,
+            exit_code: Some(exit_code),
+            stdout,
+            stderr,
+            duracion: Duration::from_secs(3),
+        }
+    }
+
+    #[test]
+    fn exit_distinto_de_cero_sin_json_es_fallo_de_arranque_con_stderr() {
+        let error =
+            interpretar_salida(salida(1, "", "Not logged in. Run `claude login`.\n")).unwrap_err();
+        match error {
+            AgentError::AgenteNoArranco { exit_code, stderr } => {
+                assert_eq!(exit_code, Some(1));
+                assert_eq!(stderr, "Not logged in. Run `claude login`.");
+            }
+            otro => panic!("se esperaba AgenteNoArranco, llegó {otro:?}"),
+        }
+    }
+
+    #[test]
+    fn exit_distinto_de_cero_con_json_es_intento_fallido_y_cuenta_tokens() {
+        // Claude Code sale con 1 e `is_error: true` cuando falla ya corriendo:
+        // eso sí es un intento y sus tokens deben contarse.
+        let json =
+            r#"{"type":"result","is_error":true,"usage":{"input_tokens":700,"output_tokens":50}}"#;
+        let resultado = interpretar_salida(salida(1, json, "error de API")).unwrap();
+        assert!(!resultado.exito);
+        assert_eq!(resultado.tokens, 750);
+        assert_eq!(resultado.duracion, Duration::from_secs(3));
+    }
+
+    #[test]
+    fn exit_cero_con_json_ilegible_sigue_siendo_respuesta_ilegible() {
+        let error = interpretar_salida(salida(0, "no json", "")).unwrap_err();
+        assert!(matches!(error, AgentError::Json(_)), "{error:?}");
+    }
+
+    #[test]
+    fn exit_distinto_de_cero_con_json_sin_error_no_cuenta_como_exito() {
+        let resultado = interpretar_salida(salida(2, r#"{"is_error": false}"#, "")).unwrap();
+        assert!(!resultado.exito);
+    }
+
+    #[test]
+    fn el_stderr_se_trunca_conservando_la_cola() {
+        let largo: String = "x"
+            .repeat(MAX_STDERR)
+            .chars()
+            .chain("FIN".chars())
+            .collect();
+        let error = interpretar_salida(salida(1, "", &largo)).unwrap_err();
+        match error {
+            AgentError::AgenteNoArranco { stderr, .. } => {
+                assert_eq!(stderr.chars().count(), MAX_STDERR);
+                assert!(stderr.ends_with("FIN"));
+            }
+            otro => panic!("se esperaba AgenteNoArranco, llegó {otro:?}"),
+        }
+        // Sin exceso no se toca.
+        assert_eq!(cola("corto", 10), "corto");
     }
 }
